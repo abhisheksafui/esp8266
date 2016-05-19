@@ -1,4 +1,26 @@
 
+
+#include "ets_sys.h"
+#include "osapi.h"
+#include "driver/uart.h"
+#include "osapi.h"
+#include "driver/uart_register.h"
+#include "mem.h"
+#include "os_type.h"
+
+extern UartDevice    UartDev; 
+
+os_timer_t buff_timer_t;
+void ICACHE_FLASH_ATTR
+uart_rx_processing()
+{
+    uint8 uart_buf[128]={0};
+    uint16 len = 0;
+    len = rx_buff_deq(uart_buf, 128 );
+    tx_buff_enq(uart_buf,len);
+}
+ 
+  
 void ICACHE_FLASH_ATTR
 uart_init(UartBautRate uart0_br, UartBautRate uart1_br)
 {
@@ -31,7 +53,7 @@ uart_init(UartBautRate uart0_br, UartBautRate uart1_br)
     
     #if UART_SELFTEST&UART_BUFF_EN
     os_timer_disarm(&buff_timer_t);
-    os_timer_setfn(&buff_timer_t, uart_test_rx , NULL);   //a demo to process the data in uart rx buffer
+    os_timer_setfn(&buff_timer_t, uart_rx_processing , NULL);   //a demo to process the data in uart rx buffer
     os_timer_arm(&buff_timer_t,10,1);
     #endif
 }
