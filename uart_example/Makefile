@@ -1,14 +1,15 @@
 CC = xtensa-lx106-elf-gcc
-CFLAGS = -I. -mlongcalls
+#CFLAGS = -I. -mlongcalls
 LDLIBS = -nostdlib -Wl,--start-group -lmain -lnet80211 -lwpa -llwip -lpp -lphy -Wl,--end-group -lgcc
-LDFLAGS = -Teagle.app.v6.ld
+#LDFLAGS = -Teagle.app.v6.ld
 
 blinky-0x00000.bin: blinky
 	esptool.py elf2image $^
 
-blinky: blinky.o
+blinky: blinky.o uart.o 
 
-blinky.o: blinky.c
+%.o: %.c
+	$(CC) -I .$(CFLAGS) $(LDFLAGS) -o $@ $<
 
 flash: blinky-0x00000.bin
 	esptool.py write_flash 0 blinky-0x00000.bin 0x40000 blinky-0x40000.bin

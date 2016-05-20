@@ -1,5 +1,3 @@
-
-
 #include "ets_sys.h"
 #include "osapi.h"
 #include "driver/uart.h"
@@ -8,19 +6,84 @@
 #include "mem.h"
 #include "os_type.h"
 
-extern UartDevice    UartDev; 
+// UartDev is defined and initialized in rom code.
+extern UartDevice    UartDev;
 
-os_timer_t buff_timer_t;
-void ICACHE_FLASH_ATTR
-uart_rx_processing()
+#define UART_BUFF_EN 1
+LOCAL struct UartBuffer* pTxBuffer = NULL;
+LOCAL struct UartBuffer* pRxBuffer = NULL;
+
+/*uart demo with a system task, to output what uart receives*/
+/*this is a example to process uart data from task,please change the priority to fit your application task if exists*/
+/*it might conflict with your task, if so,please arrange the priority of different task,  or combine it to a different event in the same task. */
+#define uart_recvTaskPrio        0
+#define uart_recvTaskQueueLen    1
+os_event_t    uart_recvTaskQueue[uart_recvTaskQueueLen];
+
+LOCAL void ICACHE_FLASH_ATTR uart_recvTask(os_event *events)
 {
-    uint8 uart_buf[128]={0};
-    uint16 len = 0;
-    len = rx_buff_deq(uart_buf, 128 );
-    tx_buff_enq(uart_buf,len);
+  /*
+   * This Function is posted from rx interrupt handler 
+   */
+  if(events->sig == 0)
+  {
+    /*
+     * Copy the data from hardware FIFO to pRxBuffer
+     */
+    Uart_rx_buff_enq(); 
+  }
+  else 
+  {
+
+  }
 }
- 
-  
+uint16 ICACHE_FLASH_ATTR uart0_data_available(void)
+{
+  return (pRxBuffer->UartBuffSize - pRxBuffer->Space);
+}
+char ICACHE_FLASH_ATTR rx_buff_deq_char(char *databuff, uint16 dataBuffLen)
+{
+  char ch = 0; 
+  if(pRxBuffer->UartBuffSize ==  pRxBuffer->Space) //Empty buffer
+  {
+    return RX_BUFF_EMPTY; 
+  }
+  else 
+  {
+    ch = *(pRxBuffer->pOutPos); 
+    pRxBuffer->pOutPos = (pRxBuffer->pOutPos + 1 ) % pRxBuffer->UartBuffSize;
+    return ch 
+}
+
+/*
+ * copies a line  in the buffer provided
+ * return the strlen 
+ */
+int16 ICACHE_FLASH_ATTR rx_buff_deq_line(char *databuff, uint16 dataBuffLen)
+{
+  uint16 count = 0; 
+  uint16 buf_len =  (pRxBuffer->UartBuffSize- pRxBuffer->Space);
+
+  char ch;
+  while(count < dataBuffLen) 
+  {
+    ch =  rx_buff_deq_char()
+    if(ch == RX_BUFF_EMPTY) //Loop until we find a \n or \r character or buffer exhausts 
+    {
+      continue; 
+    }
+    if( ch == '\n' || ch == '\r' || ch == 0) 
+    {
+      data[count] = 0;
+      break;
+    }
+    databuff[count++] = ch; 
+    pRxBuffer->pOutPos = (pRxBuffer->pOutPos + 1 ) % pRxBuffer->UartBuffSize;
+  }
+
+
+ return count;  
+}
 void ICACHE_FLASH_ATTR
 uart_init(UartBautRate uart0_br, UartBautRate uart1_br)
 {
@@ -50,10 +113,12 @@ uart_init(UartBautRate uart0_br, UartBautRate uart1_br)
     /*see uart0_write_char_no_wait:you can output via a buffer or output directly */
     /*os_printf output uart data via uart0 or uart buffer*/
     //os_install_putc1((void *)uart0_write_char_no_wait);  //use this to print via uart0
+
+    os_install_putc1((void *)uart1_write_char);  //use this to print via uart0
     
     #if UART_SELFTEST&UART_BUFF_EN
     os_timer_disarm(&buff_timer_t);
-    os_timer_setfn(&buff_timer_t, uart_rx_processing , NULL);   //a demo to process the data in uart rx buffer
+    os_timer_setfn(&buff_timer_t, uart_test_rx , NULL);   //a demo to process the data in uart rx buffer
     os_timer_arm(&buff_timer_t,10,1);
     #endif
 }
